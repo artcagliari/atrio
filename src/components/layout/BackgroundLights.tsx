@@ -8,7 +8,7 @@ const RUIDO =
 
 export function BackgroundLights() {
   return (
-    <div aria-hidden="true" className="pointer-events-none fixed inset-0 -z-10 overflow-hidden bg-gradient-to-b from-[#05141A] to-[#0A2A30]">
+    <div aria-hidden="true" className="fundo-luzes pointer-events-none fixed inset-0 -z-10 overflow-hidden bg-gradient-to-b from-[#05141A] to-[#0A2A30]">
       <div className="absolute inset-0 animate-in fade-in-0 [animation-duration:800ms]">
         {/* 1. Ciano luminoso — a luz entrando pelo teto */}
         <div className="absolute -top-[30vh] left-1/2 h-[62vh] w-[62vw] -translate-x-1/2">

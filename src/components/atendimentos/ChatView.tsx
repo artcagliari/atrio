@@ -2,6 +2,7 @@ import { Paperclip } from "lucide-react";
 import { Fragment } from "react";
 import { Logo } from "@/components/layout/Logo";
 import { ArcoInicial } from "@/components/ui/arco";
+import { Digitando } from "./Digitando";
 import type { Mensagem } from "@/lib/types";
 import { cn, formatarDataLonga, formatarHora, mesmoDia } from "@/lib/utils";
 
@@ -12,10 +13,12 @@ interface ChatViewProps {
   nomeCliente: string;
   nomeAssistente: string;
   nomeEquipe: string;
+  /** Mostra o balão "digitando…" do assistente (triagem ao vivo) */
+  assistenteDigitando?: boolean;
 }
 
 /** Conversa em balões de vidro — somente leitura. Cliente à esquerda; assistente (arco) e equipe (avatar) à direita. */
-export function ChatView({ mensagens, nomeCliente, nomeAssistente, nomeEquipe }: ChatViewProps) {
+export function ChatView({ mensagens, nomeCliente, nomeAssistente, nomeEquipe, assistenteDigitando }: ChatViewProps) {
   return (
     <section aria-label="Conversa completa">
       <ol className="flex flex-col gap-2">
@@ -66,6 +69,16 @@ export function ChatView({ mensagens, nomeCliente, nomeAssistente, nomeEquipe }:
             </Fragment>
           );
         })}
+        {assistenteDigitando && (
+          <li className="mt-3 flex items-end gap-2.5 self-end">
+            <div className="vidro-interno rounded-[18px] rounded-br-md px-4 py-3 text-apoio [--vidro-a:0.12]">
+              <Digitando rotulo={`${nomeAssistente} está escrevendo`} />
+            </div>
+            <span className="flex w-7 justify-center" aria-hidden="true">
+              <Logo variant="mark" tom="neutro" tamanho={22} />
+            </span>
+          </li>
+        )}
       </ol>
     </section>
   );

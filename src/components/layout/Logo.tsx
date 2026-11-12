@@ -25,7 +25,7 @@ export function Logo({ variant = "full", tom = "latao", className, tamanho = 32 
         <circle cx="16" cy="3.2" r="1.9" fill="rgb(var(--ciano))" />
         <circle cx="16" cy="3.2" r="4.5" fill="rgb(var(--ciano))" opacity="0.18" />
       </svg>
-      {variant === "full" && <span className="font-serif text-[26px] leading-none tracking-[-0.01em]">Átrio</span>}
+      {variant === "full" && <span className="font-serif text-[22px] leading-none">Átrio</span>}
       {variant === "mark" && <span className="sr-only">Átrio</span>}
     </span>
   );

@@ -20,6 +20,7 @@ export const uid = (prefixo = "id") => `${prefixo}-${Math.random().toString(36).
 /* ---------- Rótulos ---------- */
 
 export const STATUS_LABEL: Record<StatusAtendimento, string> = {
+  em_triagem: "Em triagem",
   novo: "Novo",
   aguardando_analise: "Aguardando análise",
   consulta_agendada: "Consulta agendada",
@@ -29,6 +30,7 @@ export const STATUS_LABEL: Record<StatusAtendimento, string> = {
 };
 
 export const STATUS_ORDEM: StatusAtendimento[] = [
+  "em_triagem",
   "novo",
   "aguardando_analise",
   "consulta_agendada",
@@ -113,8 +115,12 @@ export function tempoRelativo(iso: string, agora = Date.now()) {
 export const aguardaRetorno = (a: Atendimento) =>
   !a.ultimoContatoHumano && (a.status === "novo" || a.status === "aguardando_analise");
 
-/** Urgente que ainda não recebeu retorno — alimenta o contador vermelho. */
-export const urgentePendente = (a: Atendimento) => a.urgente && aguardaRetorno(a);
+/**
+ * Urgente que ainda não falou com uma pessoa da equipe — alimenta o contador vermelho.
+ * Mesmo que o assistente já tenha agendado a consulta, caso urgente pede contato humano.
+ */
+export const urgentePendente = (a: Atendimento) =>
+  a.urgente && !a.ultimoContatoHumano && !["contratou", "nao_contratou", "fora_de_escopo"].includes(a.status);
 
 export function iniciais(nome: string) {
   const partes = nome.trim().split(/\s+/);

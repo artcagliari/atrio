@@ -173,6 +173,12 @@
     box-shadow: 0 0 0 4px rgb(var(--latao) / 0.16);
   }
 
+  /* Títulos em serifa de texto, semibold: tom institucional */
+  .font-serif {
+    font-weight: 600;
+    font-optical-sizing: auto;
+  }
+
   .scrollbar-fina {
     scrollbar-width: thin;
     scrollbar-color: rgb(255 255 255 / 0.18) transparent;
@@ -201,5 +207,54 @@
   }
   .vidro-clicavel:hover {
     transform: none;
+  }
+}
+
+/* Impressão do relatório: documento limpo, preto no branco */
+@media print {
+  @page {
+    margin: 16mm 14mm;
+  }
+  html,
+  body {
+    background: #fff !important;
+  }
+  .fundo-luzes,
+  .nao-imprimir,
+  [data-sonner-toaster] {
+    display: none !important;
+  }
+  .relatorio {
+    background: #fff !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+    box-shadow: none !important;
+    border: 0 !important;
+    padding: 0 !important;
+  }
+  .relatorio::before,
+  .relatorio::after {
+    display: none !important;
+  }
+  .relatorio,
+  .relatorio * {
+    color: #111 !important;
+    border-color: #d4d4d4 !important;
+  }
+  .relatorio .text-muted-foreground,
+  .relatorio .marker\:text-muted-foreground ::marker {
+    color: #555 !important;
+  }
+  .relatorio .vidro-interno {
+    background: #f4f4f4 !important;
+  }
+  .relatorio [class*="bg-foreground"] {
+    background: #777 !important;
+  }
+  .relatorio .vidro-interno::before {
+    display: none !important;
+  }
+  .relatorio section {
+    break-inside: avoid;
   }
 }

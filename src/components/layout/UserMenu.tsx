@@ -1,4 +1,4 @@
-import { Building2, FlaskConical, LogOut, Rocket } from "lucide-react";
+import { Building2, FlaskConical, LogOut, MessageCircle, Rocket } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { ArcoInicial } from "@/components/ui/arco";
 import {
@@ -9,6 +9,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { useTriagemAoVivo } from "@/hooks/useTriagemAoVivo";
 import { gerarAtendimentoUrgente } from "@/lib/mock-data";
 import { useAppStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
@@ -19,6 +20,7 @@ export const MOSTRAR_FERRAMENTAS_DEV = import.meta.env.DEV || import.meta.env.VI
 export function UserMenu({ comNome = false, className }: { comNome?: boolean; className?: string }) {
   const { usuario, empresa, sair, adicionarAtendimento } = useAppStore();
   const navigate = useNavigate();
+  const { simularCliente } = useTriagemAoVivo();
 
   return (
     <DropdownMenu>
@@ -49,7 +51,10 @@ export function UserMenu({ comNome = false, className }: { comNome?: boolean; cl
         {MOSTRAR_FERRAMENTAS_DEV && (
           <>
             <DropdownMenuSeparator />
-            <DropdownMenuLabel>Desenvolvimento</DropdownMenuLabel>
+            <DropdownMenuLabel>Demonstração</DropdownMenuLabel>
+            <DropdownMenuItem onSelect={simularCliente}>
+              <MessageCircle strokeWidth={1.5} aria-hidden="true" /> Simular cliente no WhatsApp
+            </DropdownMenuItem>
             <DropdownMenuItem onSelect={() => adicionarAtendimento(gerarAtendimentoUrgente())}>
               <FlaskConical strokeWidth={1.5} aria-hidden="true" /> Simular atendimento urgente
             </DropdownMenuItem>

@@ -1,8 +1,9 @@
 import * as DialogPrimitive from "@radix-ui/react-dialog";
-import { BellRing, CalendarDays, CornerDownLeft, FlaskConical, Inbox, LogOut, Rocket, Search, Settings, Volume2, VolumeX, type LucideIcon } from "lucide-react";
+import { BellRing, CalendarDays, CornerDownLeft, Filter, FlaskConical, Inbox, LogOut, MessageCircle, Rocket, Search, Settings, Volume2, VolumeX, type LucideIcon } from "lucide-react";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArcoInicial } from "@/components/ui/arco";
+import { useTriagemAoVivo } from "@/hooks/useTriagemAoVivo";
 import { useUrgentAlerts } from "@/hooks/useUrgentAlerts";
 import { gerarAtendimentoUrgente } from "@/lib/mock-data";
 import { useAppStore } from "@/lib/store";
@@ -76,6 +77,7 @@ export function CommandPaletteProvider({ children }: { children: ReactNode }) {
 function Conteudo({ fechar }: { fechar: () => void }) {
   const { atendimentos, sair, adicionarAtendimento } = useAppStore();
   const { mudo, alternarMudo, permissao, pedirPermissao } = useUrgentAlerts();
+  const { simularCliente } = useTriagemAoVivo();
   const navigate = useNavigate();
   const [busca, setBusca] = useState("");
   const [ativo, setAtivo] = useState(0);
@@ -104,6 +106,7 @@ function Conteudo({ fechar }: { fechar: () => void }) {
       }));
     const telas: Item[] = [
       { id: "t-at", grupo: "Telas", rotulo: "Atendimentos", icone: Inbox, termos: "atendimentos lista contatos", executar: ir(() => navigate("/atendimentos")) },
+      { id: "t-fu", grupo: "Telas", rotulo: "Funil de triagem", icone: Filter, termos: "funil triagem etapas conversao", executar: ir(() => navigate("/funil")) },
       { id: "t-ag", grupo: "Telas", rotulo: "Agenda", icone: CalendarDays, termos: "agenda consultas calendario", executar: ir(() => navigate("/agenda")) },
       ...SECOES_CONFIG.map(([id, nome]) => ({
         id: `t-cfg-${id}`,
@@ -127,7 +130,7 @@ function Conteudo({ fechar }: { fechar: () => void }) {
         ? [{ id: "a-notif", grupo: "Ações" as const, rotulo: "Ativar notificações do navegador", icone: BellRing, termos: "notificacoes permissao avisos", executar: ir(() => void pedirPermissao()) }]
         : []),
       ...(MOSTRAR_FERRAMENTAS_DEV
-        ? [{ id: "a-sim", grupo: "Ações" as const, rotulo: "Simular atendimento urgente", icone: FlaskConical, termos: "simular teste urgente desenvolvimento", executar: ir(() => adicionarAtendimento(gerarAtendimentoUrgente())) }]
+        ? [{ id: "a-cli", grupo: "Ações" as const, rotulo: "Simular cliente no WhatsApp", icone: MessageCircle, termos: "simular cliente whatsapp triagem demonstracao", executar: ir(simularCliente) }, { id: "a-sim", grupo: "Ações" as const, rotulo: "Simular atendimento urgente", icone: FlaskConical, termos: "simular teste urgente desenvolvimento", executar: ir(() => adicionarAtendimento(gerarAtendimentoUrgente())) }]
         : []),
       { id: "a-onb", grupo: "Ações", rotulo: "Refazer configuração inicial", icone: Rocket, termos: "onboarding configuracao inicial", executar: ir(() => navigate("/onboarding")) },
       {
@@ -145,8 +148,8 @@ function Conteudo({ fechar }: { fechar: () => void }) {
 
     const termo = normalizar(busca.trim());
     const filtrar = (l: Item[]) => (termo ? l.filter((i) => normalizar(`${i.rotulo} ${i.termos}`).includes(termo)) : l);
-    return [...filtrar(clientes).slice(0, termo ? 8 : 5), ...filtrar(telas).slice(0, termo ? 10 : 2), ...filtrar(acoes)];
-  }, [atendimentos, busca, mudo, permissao, ir, navigate, alternarMudo, pedirPermissao, adicionarAtendimento, sair]);
+    return [...filtrar(clientes).slice(0, termo ? 8 : 5), ...filtrar(telas).slice(0, termo ? 10 : 3), ...filtrar(acoes)];
+  }, [atendimentos, busca, mudo, permissao, ir, navigate, alternarMudo, pedirPermissao, adicionarAtendimento, sair, simularCliente]);
 
   useEffect(() => setAtivo(0), [busca]);
   useEffect(() => {

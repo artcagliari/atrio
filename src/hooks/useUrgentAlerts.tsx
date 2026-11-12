@@ -164,17 +164,18 @@ export function UrgentAlertsProvider({ children }: { children: ReactNode }) {
     [abrirAtendimento, notificarNavegador, tocarSom],
   );
 
-  // Detecta atendimentos urgentes que chegaram depois da carga inicial.
+  // Avisa uma vez por atendimento que chega urgente ou que se torna urgente durante a triagem
+  // (ex.: o cliente menciona "intimação" no meio da conversa). Os urgentes da carga inicial não tocam.
   useEffect(() => {
     if (carregando) return;
     if (!vistos.current) {
-      vistos.current = new Set(atendimentos.map((a) => a.id));
+      vistos.current = new Set(atendimentos.filter((a) => a.urgente).map((a) => a.id));
       return;
     }
     for (const a of atendimentos) {
-      if (vistos.current.has(a.id)) continue;
+      if (!a.urgente || vistos.current.has(a.id)) continue;
       vistos.current.add(a.id);
-      if (a.urgente) disparar(a);
+      disparar(a);
     }
   }, [atendimentos, carregando, disparar]);
 

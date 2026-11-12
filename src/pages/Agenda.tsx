@@ -1,6 +1,6 @@
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { Bot, ChevronLeft, ChevronRight } from "lucide-react";
 import { useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { ConsultaDialog } from "@/components/atendimentos/ConsultaDialog";
 import { EmptyState } from "@/components/atendimentos/EmptyState";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/button";
@@ -27,12 +27,12 @@ const HORA_PX = 64;
 
 export default function Agenda() {
   const { consultas, atendimentos, horarios } = useAppStore();
-  const navigate = useNavigate();
   const agora = useAgora();
   const [modo, setModo] = useState<Modo>("semana");
   const [referencia, setReferencia] = useState(() => new Date());
+  const [aberta, setAberta] = useState<Consulta | null>(null);
 
-  const abrir = (id: string) => navigate(`/atendimentos?id=${encodeURIComponent(id)}`);
+  const abrir = (c: Consulta) => setAberta(c);
   const porId = useMemo(() => new Map(atendimentos.map((a) => [a.id, a])), [atendimentos]);
   const ativas = consultas.filter((c) => c.status !== "cancelada");
 
@@ -91,6 +91,14 @@ export default function Agenda() {
         <p className="ml-3 text-corpo first-letter:uppercase" aria-live="polite">
           {rotuloPeriodo}
         </p>
+        <p className="ml-auto hidden items-center gap-4 text-micro text-muted-foreground lg:flex">
+          <span className="flex items-center gap-1.5">
+            <span className="inline-block h-3 w-5 rounded border border-dashed border-white/60" aria-hidden="true" /> a confirmar
+          </span>
+          <span className="flex items-center gap-1.5">
+            <Bot className="size-3.5" strokeWidth={1.5} aria-hidden="true" /> marcada pelo assistente
+          </span>
+        </p>
       </div>
 
       <div key={modo + dias[0].toDateString()} className="animate-in fade-in-0 duration-300">
@@ -100,6 +108,8 @@ export default function Agenda() {
           <Grade dias={dias} horaIni={horaIni} horaFim={horaFim} agora={agora} consultasDoDia={doDia} porId={porId} onAbrir={abrir} />
         )}
       </div>
+
+      <ConsultaDialog consulta={aberta} onOpenChange={(v) => !v && setAberta(null)} />
     </div>
   );
 }
@@ -111,7 +121,7 @@ interface GradeProps {
   agora: number;
   consultasDoDia: (d: Date) => Consulta[];
   porId: Map<string, Atendimento>;
-  onAbrir: (id: string) => void;
+  onAbrir: (c: Consulta) => void;
 }
 
 /** Grade de horários: colunas de vidro leve, consultas em vidro médio e linha de latão na hora atual. */
@@ -180,12 +190,18 @@ function Grade({ dias, horaIni, horaFim, agora, consultasDoDia, porId, onAbrir }
                   <button
                     key={c.id}
                     type="button"
-                    onClick={() => onAbrir(c.atendimentoId)}
-                    aria-label={`${formatarHora(c.inicio)}, ${a?.nome ?? "contato"}, ${STATUS_CONSULTA_LABEL[c.status]}. Abrir atendimento`}
-                    className="vidro vidro-clicavel absolute inset-x-1.5 z-[1] [--vidro-a:0.03] flex flex-col justify-start gap-0.5 overflow-hidden rounded-xl px-3 py-2 text-left"
+                    onClick={() => onAbrir(c)}
+                    aria-label={`${formatarHora(c.inicio)}, ${a?.nome ?? "contato"}, ${STATUS_CONSULTA_LABEL[c.status]}${c.agendadaPor === "assistente" ? ", marcada pelo assistente" : ""}. Ver consulta`}
+                    className={cn(
+                      "vidro vidro-clicavel absolute inset-x-1.5 z-[1] flex flex-col justify-start gap-0.5 overflow-hidden rounded-xl px-3 py-2 text-left [--vidro-a:0.03]",
+                      c.status === "pre_agendada" && "!border-dashed !border-white/45",
+                    )}
                     style={{ top: top + 3, height: alt }}
                   >
-                    <span className="truncate text-apoio font-medium">{a?.nome ?? "Contato removido"}</span>
+                    <span className="flex items-center gap-1.5">
+                      <span className="truncate text-apoio font-medium">{a?.nome ?? "Contato removido"}</span>
+                      {c.agendadaPor === "assistente" && <Bot className="size-3.5 shrink-0 text-foreground/80" strokeWidth={1.5} aria-hidden="true" />}
+                    </span>
                     <span className="truncate font-mono text-micro text-foreground/90">
                       {formatarHora(c.inicio)} · {STATUS_CONSULTA_LABEL[c.status].toLowerCase()}
                     </span>

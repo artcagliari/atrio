@@ -38,6 +38,8 @@ export interface RegraUrgencia {
 }
 
 export type StatusAtendimento =
+  /** O assistente ainda está conversando com o cliente no WhatsApp */
+  | "em_triagem"
   | "novo"
   | "aguardando_analise"
   | "consulta_agendada"
@@ -87,6 +89,8 @@ export interface Atendimento {
   criadoEm: string;
   /** ISO 8601 */
   ultimoContatoHumano?: string;
+  /** O assistente está escrevendo uma mensagem agora (triagem ao vivo) */
+  assistenteDigitando?: boolean;
 }
 
 export type StatusConsulta = "pre_agendada" | "confirmada" | "realizada" | "cancelada";
@@ -99,6 +103,8 @@ export interface Consulta {
   /** ISO 8601 */
   fim: string;
   status: StatusConsulta;
+  /** Quem marcou: o assistente no WhatsApp ou a equipe pelo painel */
+  agendadaPor?: "assistente" | "equipe";
 }
 
 /* ---------- Configuração do assistente ---------- */

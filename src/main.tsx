@@ -1,6 +1,6 @@
 import "@fontsource-variable/geist";
 import "@fontsource-variable/geist-mono";
-import "@fontsource/instrument-serif/400.css";
+import "@fontsource-variable/source-serif-4";
 import "./index.css";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";

@@ -1,17 +1,21 @@
 import { useMemo, useState, type RefObject } from "react";
+import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { horariosLivres, proximosDiasDisponiveis } from "@/lib/agenda";
+import { devolverFoco } from "@/lib/foco";
 import { useAppStore } from "@/lib/store";
-import type { Atendimento, DiaSemana } from "@/lib/types";
+import type { Atendimento, Consulta, DiaSemana } from "@/lib/types";
 import { cn, DIAS_SEMANA, formatarDataCurta, formatarDataLonga, formatarHora, mesmoDia } from "@/lib/utils";
 
 interface Props {
   atendimento: Atendimento;
   aberto: boolean;
   onOpenChange: (v: boolean) => void;
-  /** Elemento que recebe o foco ao fechar (o diálogo é aberto de dentro do painel, sem DialogTrigger). */
+  /** Quando informado, remarca esta consulta em vez de criar outra */
+  remarcar?: Consulta;
+  /** Elemento que recebe o foco ao fechar (o diálogo é aberto de dentro de outros painéis) */
   retornarFocoPara?: RefObject<HTMLElement>;
 }
 
@@ -19,15 +23,15 @@ const opcao = "vidro-interno rounded-xl text-apoio transition-[background-color,
 const opcaoInativa = "text-foreground [--vidro-a:0.04] hover:[--vidro-a:0.08]";
 const opcaoAtiva = "!border-white/70 text-foreground [--vidro-a:0.1] [--brilho:0.8] [&_*]:!text-foreground";
 
-export function AgendarConsultaDialog({ atendimento, aberto, onOpenChange, retornarFocoPara }: Props) {
-  const { horarios, consultas, agendarConsulta } = useAppStore();
+export function AgendarConsultaDialog({ atendimento, aberto, onOpenChange, remarcar, retornarFocoPara }: Props) {
+  const { horarios, consultas, agendarConsulta, remarcarConsulta } = useAppStore();
+  const navigate = useNavigate();
   const dias = useMemo(() => proximosDiasDisponiveis(horarios, 10), [horarios]);
   const [dia, setDia] = useState<Date | null>(null);
   const [hora, setHora] = useState<Date | null>(null);
 
   const diaAtivo = dia ?? dias.find((d) => horariosLivres(d, horarios, consultas).length > 0) ?? dias[0];
   const livres = diaAtivo ? horariosLivres(diaAtivo, horarios, consultas) : [];
-  const preAgendar = horarios.modo === "pre_agendar";
 
   function fechar(v: boolean) {
     if (!v) {
@@ -39,9 +43,11 @@ export function AgendarConsultaDialog({ atendimento, aberto, onOpenChange, retor
 
   function confirmar() {
     if (!hora) return;
-    agendarConsulta(atendimento.id, hora);
-    toast.success(preAgendar ? "Consulta pré-agendada" : "Consulta agendada", {
-      description: `${atendimento.nome} · ${formatarDataLonga(hora)}, às ${formatarHora(hora)}`,
+    if (remarcar) remarcarConsulta(remarcar.id, hora);
+    else agendarConsulta(atendimento.id, hora, "equipe");
+    toast.success(remarcar ? "Consulta remarcada" : "Consulta agendada", {
+      description: `${atendimento.nome} · ${formatarDataLonga(hora)}, às ${formatarHora(hora)}. O relatório para a consulta está pronto.`,
+      action: { label: "Ver relatório", onClick: () => navigate(`/relatorio/${atendimento.id}`) },
     });
     fechar(false);
   }
@@ -50,17 +56,13 @@ export function AgendarConsultaDialog({ atendimento, aberto, onOpenChange, retor
     <Dialog open={aberto} onOpenChange={fechar}>
       <DialogContent
         className="max-w-xl"
-        onCloseAutoFocus={(e) => {
-          if (!retornarFocoPara?.current) return;
-          e.preventDefault();
-          retornarFocoPara.current.focus();
-        }}
+        onCloseAutoFocus={(e) => devolverFoco(e, retornarFocoPara)}
       >
         <DialogHeader>
-          <DialogTitle>Agendar consulta</DialogTitle>
+          <DialogTitle>{remarcar ? "Remarcar consulta" : "Agendar consulta"}</DialogTitle>
           <DialogDescription>
-            {atendimento.nome} · <span className="font-mono">{horarios.duracaoMinutos} min</span> ·{" "}
-            {preAgendar ? "fica pré-agendada até a equipe aprovar" : "confirmada na hora"}
+            {atendimento.nome} · <span className="font-mono">{horarios.duracaoMinutos} min</span>
+            {remarcar && ` · atual: ${formatarDataLonga(remarcar.inicio)}, ${formatarHora(remarcar.inicio)}`}
           </DialogDescription>
         </DialogHeader>
 
@@ -117,7 +119,7 @@ export function AgendarConsultaDialog({ atendimento, aberto, onOpenChange, retor
             Cancelar
           </Button>
           <Button variant="latao" onClick={confirmar} disabled={!hora}>
-            {preAgendar ? "Pré-agendar" : "Confirmar consulta"}
+            {remarcar ? "Remarcar" : "Agendar consulta"}
           </Button>
         </DialogFooter>
       </DialogContent>

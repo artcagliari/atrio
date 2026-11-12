@@ -32,6 +32,10 @@ function emDias(dias: number, hh: number, mm = 0) {
   return d;
 }
 
+const fmtHorario = new Intl.DateTimeFormat("pt-BR", { weekday: "long", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+/** Data/hora por extenso para as mensagens do assistente (ex.: "sexta-feira, 06/11, 15:00"). */
+const quando = (dias: number, hh: number) => fmtHorario.format(emDias(dias, hh));
+
 /** Monta uma conversa espaçando as mensagens em ~1–2 minutos a partir de `inicioIso`. */
 function conversa(prefixo: string, inicioIso: string, linhas: [AutorMensagem, string][]): Mensagem[] {
   let t = new Date(inicioIso).getTime() - linhas.length * 1.5 * MIN;
@@ -227,6 +231,32 @@ function atd(a: Omit<Atendimento, "mensagens"> & { conversa: [AutorMensagem, str
 
 export const atendimentosMock: Atendimento[] = [
   atd({
+    id: "at-16",
+    nome: "Paulo Henrique Matos",
+    telefone: "(41) 99514-3086",
+    cidade: "Curitiba – PR",
+    area: "Trabalhista",
+    urgente: false,
+    status: "em_triagem",
+    criadoEm: horasAtras(0.15),
+    resumoIA: "Triagem em andamento — o assistente ainda está coletando as informações do cliente.",
+    respostas: [
+      { pergunta: "Qual era a sua função na empresa?", resposta: "Repositor em supermercado." },
+      { pergunta: "Por quanto tempo trabalhou lá?", resposta: "Um ano e meio." },
+    ],
+    documentos: [],
+    conversa: [
+      ["cliente", "Oi, fui mandado embora e queria saber dos meus direitos"],
+      ["assistente", "Olá! Eu sou a Clara, assistente virtual do Silveira & Prado Advocacia. Vou fazer algumas perguntas rápidas para entender a sua situação e passar tudo organizado para a nossa equipe. Pode ser?"],
+      ["cliente", "Pode. Paulo Henrique Matos, de Curitiba"],
+      ["assistente", "Obrigada, Paulo. Qual era a sua função na empresa?"],
+      ["cliente", "Repositor em supermercado"],
+      ["assistente", "Por quanto tempo trabalhou lá?"],
+      ["cliente", "Um ano e meio"],
+      ["assistente", "Ainda trabalha na empresa ou já saiu? Se saiu, qual foi o motivo?"],
+    ],
+  }),
+  atd({
     id: "at-01",
     nome: "Marcos Vinícius Pereira",
     telefone: "(41) 99734-2210",
@@ -375,8 +405,8 @@ export const atendimentosMock: Atendimento[] = [
     cidade: "Araucária – PR",
     area: "Trabalhista",
     urgente: false,
-    status: "aguardando_analise",
-    criadoEm: horasAtras(26.5),
+    status: "consulta_agendada",
+    criadoEm: horasAtras(50),
     resumoIA:
       "Motorista de caminhão há 6 anos na mesma empresa, ainda empregado. Relata jornada média de 12 horas sem pagamento de horas extras e controle de jornada apenas pelo rastreador. Quer saber se pode buscar os valores sem sair do emprego.",
     respostas: [
@@ -394,7 +424,9 @@ export const atendimentosMock: Atendimento[] = [
       ["cliente", "6 anos. Faço umas 12 horas por dia, o controle é só pelo rastreador"],
       ["assistente", "Você ainda está trabalhando lá?"],
       ["cliente", "Sim, por isso fico com medo"],
-      ["assistente", "Entendi. Registrei tudo e a equipe vai analisar e retornar. Obrigada pela confiança!"],
+      ["assistente", "Entendi, obrigada por explicar. Posso marcar uma consulta inicial com a advogada. Tenho estes horários: 1) " + quando(-1, 16) + "; 2) " + quando(0, 10) + ". Qual fica melhor?"],
+      ["cliente", "A primeira"],
+      ["assistente", "Pronto! Sua consulta ficou para " + quando(-1, 16) + ", no escritório. Se precisar remarcar, é só me avisar por aqui."],
     ],
   }),
   atd({
@@ -495,7 +527,7 @@ export const atendimentosMock: Atendimento[] = [
     cidade: "Campo Largo – PR",
     area: "Bancário",
     urgente: false,
-    status: "novo",
+    status: "consulta_agendada",
     criadoEm: horasAtras(3.1),
     resumoIA:
       "Financiou um carro em 48 parcelas e acha que os juros estão acima do contratado. Pagou 20 parcelas e está com 2 em atraso. Tem o contrato em PDF.",
@@ -513,7 +545,9 @@ export const atendimentosMock: Atendimento[] = [
       ["assistente", "Obrigada, Luciana. Quantas parcelas já pagou e tem o contrato?"],
       ["cliente", "Paguei 20 de 48, tenho 2 atrasadas"],
       ["cliente", "[pdf] contrato-financiamento.pdf"],
-      ["assistente", "Recebi o contrato. A equipe vai analisar e retornar."],
+      ["assistente", "Recebi o contrato, obrigada. Posso marcar uma consulta inicial com a advogada para olharem o contrato juntas. Tenho: 1) " + quando(1, 15) + "; 2) " + quando(2, 11) + "; 3) " + quando(2, 14) + ". Qual prefere?"],
+      ["cliente", "Pode ser a 1"],
+      ["assistente", "Combinado! Pré-agendei para " + quando(1, 15) + ". A equipe confirma com você em breve. Se puder, leve os comprovantes das parcelas pagas."],
     ],
   }),
   atd({
@@ -676,7 +710,15 @@ export const atendimentosMock: Atendimento[] = [
 /* Consultas                                                            */
 /* ------------------------------------------------------------------ */
 
-function consulta(id: string, atendimentoId: string, dias: number, hh: number, status: Consulta["status"], duracao = 60): Consulta {
+function consulta(
+  id: string,
+  atendimentoId: string,
+  dias: number,
+  hh: number,
+  status: Consulta["status"],
+  agendadaPor: Consulta["agendadaPor"],
+  duracao = 60,
+): Consulta {
   const inicio = emDias(dias, hh);
   return {
     id,
@@ -684,16 +726,18 @@ function consulta(id: string, atendimentoId: string, dias: number, hh: number, s
     inicio: inicio.toISOString(),
     fim: new Date(inicio.getTime() + duracao * MIN).toISOString(),
     status,
+    agendadaPor,
   };
 }
 
 export const consultasMock: Consulta[] = [
-  consulta("c-1", "at-07", 0, 14, "confirmada"),
-  consulta("c-2", "at-06", 1, 10, "confirmada"),
-  consulta("c-3", "at-12", 2, 9, "pre_agendada"),
-  consulta("c-4", "at-10", -2, 15, "realizada"),
-  consulta("c-5", "at-13", -3, 11, "realizada"),
-  consulta("c-6", "at-08", 3, 16, "pre_agendada"),
+  consulta("c-1", "at-07", 0, 14, "confirmada", "equipe"),
+  consulta("c-2", "at-06", 1, 10, "confirmada", "equipe"),
+  consulta("c-3", "at-12", 2, 9, "pre_agendada", "equipe"),
+  consulta("c-4", "at-10", -2, 15, "realizada", "equipe"),
+  consulta("c-5", "at-13", -3, 11, "realizada", "equipe"),
+  consulta("c-6", "at-09", 1, 15, "pre_agendada", "assistente"),
+  consulta("c-7", "at-05", -1, 16, "realizada", "assistente"),
 ];
 
 /* ------------------------------------------------------------------ */

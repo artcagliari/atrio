@@ -8,13 +8,13 @@ export default {
       fontFamily: {
         sans: ['"Geist Variable"', "ui-sans-serif", "system-ui", "sans-serif"],
         mono: ['"Geist Mono Variable"', "ui-monospace", "SFMono-Regular", "monospace"],
-        serif: ['"Instrument Serif"', "ui-serif", "Georgia", "serif"],
+        serif: ['"Source Serif 4 Variable"', "ui-serif", "Georgia", "serif"],
       },
       fontSize: {
-        // Serifa: 56 / 40 / 28 · Geist: 15 / 13 / 12
-        "display-1": ["56px", { lineHeight: "1.02", letterSpacing: "-0.02em" }],
-        "display-2": ["40px", { lineHeight: "1.08", letterSpacing: "-0.015em" }],
-        "display-3": ["28px", { lineHeight: "1.15", letterSpacing: "-0.01em" }],
+        // Serifa (títulos): 36 / 28 / 21 · Geist: 15 / 13 / 12
+        "display-1": ["36px", { lineHeight: "1.15", letterSpacing: "-0.015em" }],
+        "display-2": ["28px", { lineHeight: "1.2", letterSpacing: "-0.01em" }],
+        "display-3": ["21px", { lineHeight: "1.3", letterSpacing: "-0.005em" }],
         corpo: ["15px", { lineHeight: "1.5" }],
         apoio: ["13px", { lineHeight: "1.45" }],
         micro: ["12px", { lineHeight: "1.4" }],

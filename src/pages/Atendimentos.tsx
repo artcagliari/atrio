@@ -1,6 +1,6 @@
-import { ListFilter, Search, X } from "lucide-react";
-import { useMemo, useRef, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { ChevronDown, Search, X } from "lucide-react";
+import { useMemo } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { EmptyState } from "@/components/atendimentos/EmptyState";
 import { LeadCard, LeadCardSkeleton } from "@/components/atendimentos/LeadCard";
 import { LeadSheet } from "@/components/atendimentos/LeadSheet";
@@ -13,22 +13,24 @@ import {
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { GlassCard } from "@/components/ui/glass-card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAgora } from "@/hooks/useAgora";
 import { useAppStore } from "@/lib/store";
-import type { StatusAtendimento } from "@/lib/types";
-import { aguardaRetorno, cn, mesmoDia, normalizar, urgentePendente } from "@/lib/utils";
+import type { Atendimento, StatusAtendimento } from "@/lib/types";
+import { cn, mesmoDia, normalizar, urgentePendente } from "@/lib/utils";
 
 const GRUPOS = {
-  todos: { rotulo: "Todos", status: null },
-  novos: { rotulo: "Novos", status: ["novo", "aguardando_analise"] },
-  agendados: { rotulo: "Agendados", status: ["consulta_agendada"] },
-  encerrados: { rotulo: "Encerrados", status: ["contratou", "nao_contratou", "fora_de_escopo"] },
-} satisfies Record<string, { rotulo: string; status: StatusAtendimento[] | null }>;
+  todos: { rotulo: "Todos", filtro: () => true },
+  triagem: { rotulo: "Em triagem", filtro: (a: Atendimento) => a.status === "em_triagem" },
+  aguardando: { rotulo: "Aguardando a equipe", filtro: (a: Atendimento) => (["novo", "aguardando_analise"] as StatusAtendimento[]).includes(a.status) },
+  agendados: { rotulo: "Com consulta", filtro: (a: Atendimento) => a.status === "consulta_agendada" },
+  encerrados: { rotulo: "Encerrados", filtro: (a: Atendimento) => (["contratou", "nao_contratou", "fora_de_escopo"] as StatusAtendimento[]).includes(a.status) },
+  urgentes: { rotulo: "Urgentes", filtro: urgentePendente },
+} satisfies Record<string, { rotulo: string; filtro: (a: Atendimento) => boolean }>;
 
 type Grupo = keyof typeof GRUPOS;
+const ABAS: Grupo[] = ["todos", "triagem", "aguardando", "agendados", "encerrados"];
 const TODAS_AREAS = "todas";
 
 function saudacao(hora: number) {
@@ -39,10 +41,9 @@ function saudacao(hora: number) {
 
 export default function Atendimentos() {
   const { atendimentos, consultas, areas, usuario, carregando } = useAppStore();
-  const agora = useAgora();
+  const agora = useAgora(30_000);
+  const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
-  const [buscaAberta, setBuscaAberta] = useState(false);
-  const campoBusca = useRef<HTMLInputElement>(null);
 
   const grupo: Grupo = (params.get("grupo") as Grupo) in GRUPOS ? (params.get("grupo") as Grupo) : "todos";
   const area = params.get("area") ?? TODAS_AREAS;
@@ -63,13 +64,23 @@ export default function Atendimentos() {
 
   const hoje = new Date(agora);
   const chegaramHoje = atendimentos.filter((a) => mesmoDia(new Date(a.criadoEm), hoje)).length;
+  const marcadasPeloAssistente = consultas.filter((c) => c.agendadaPor === "assistente" && c.status !== "cancelada").length;
   const urgentes = atendimentos.filter(urgentePendente).length;
-  const novos = atendimentos.filter((a) => (GRUPOS.novos.status as readonly string[]).includes(a.status)).length;
-  const agendadosHoje = consultas.filter((c) => c.status !== "cancelada" && mesmoDia(new Date(c.inicio), hoje)).length;
+  const consultasHoje = consultas.filter((c) => c.status !== "cancelada" && mesmoDia(new Date(c.inicio), hoje)).length;
 
-  const frase =
-    (chegaramHoje === 0 ? "Nenhum contato novo hoje até agora" : `Hoje ${chegaramHoje === 1 ? "chegou 1 contato" : `chegaram ${chegaramHoje} contatos`}`) +
-    (urgentes === 0 ? " — nenhum urgente aguardando." : urgentes === 1 ? " — 1 urgente aguarda você." : ` — ${urgentes} urgentes aguardam você.`);
+  const frase = [
+    chegaramHoje === 0 ? "Nenhum contato novo hoje até agora" : `Hoje ${chegaramHoje === 1 ? "chegou 1 contato" : `chegaram ${chegaramHoje} contatos`} pelo WhatsApp`,
+    marcadasPeloAssistente > 0 && `o assistente já marcou ${marcadasPeloAssistente} ${marcadasPeloAssistente === 1 ? "consulta" : "consultas"}`,
+  ]
+    .filter(Boolean)
+    .join(" e ");
+
+  const numeros: { rotulo: string; valor: number; destaque?: boolean; acao: () => void; dica: string }[] = [
+    { rotulo: "Em triagem agora", valor: atendimentos.filter(GRUPOS.triagem.filtro).length, acao: () => setParam("grupo", "triagem"), dica: "Ver quem está conversando com o assistente" },
+    { rotulo: "Aguardando a equipe", valor: atendimentos.filter(GRUPOS.aguardando.filtro).length, acao: () => setParam("grupo", "aguardando"), dica: "Ver quem precisa de consulta marcada" },
+    { rotulo: "Urgentes", valor: urgentes, destaque: true, acao: () => setParam("grupo", "urgentes"), dica: "Ver urgentes sem contato da equipe" },
+    { rotulo: "Consultas hoje", valor: consultasHoje, acao: () => navigate("/agenda"), dica: "Abrir a agenda" },
+  ];
 
   const opcoesArea = useMemo(() => {
     const nomes = new Set(areas.filter((a) => a.ativa).map((a) => a.nome));
@@ -79,108 +90,98 @@ export default function Atendimentos() {
 
   const lista = useMemo(() => {
     const termo = normalizar(busca.trim());
-    const status: readonly StatusAtendimento[] | null = GRUPOS[grupo].status;
     return atendimentos
       .filter((a) => {
-        if (status && !status.includes(a.status)) return false;
+        if (!GRUPOS[grupo].filtro(a)) return false;
         if (area !== TODAS_AREAS && a.area !== area) return false;
         if (!termo) return true;
         return normalizar(`${a.nome} ${a.telefone} ${a.cidade} ${a.area} ${a.resumoIA} ${a.motivoUrgencia ?? ""}`).includes(termo);
       })
       .sort((x, y) => {
-        const ux = Number(x.urgente && aguardaRetorno(x));
-        const uy = Number(y.urgente && aguardaRetorno(y));
-        if (ux !== uy) return uy - ux;
+        // Urgentes pendentes no topo; depois quem está em triagem ao vivo; depois os mais recentes.
+        const peso = (a: Atendimento) => (urgentePendente(a) ? 2 : a.status === "em_triagem" ? 1 : 0);
+        if (peso(x) !== peso(y)) return peso(y) - peso(x);
         return new Date(y.criadoEm).getTime() - new Date(x.criadoEm).getTime();
       });
   }, [atendimentos, grupo, area, busca]);
 
   const selecionado = atendimentos.find((a) => a.id === selecionadoId) ?? null;
-  const temFiltro = busca !== "" || area !== TODAS_AREAS;
+  const temFiltro = busca !== "" || area !== TODAS_AREAS || grupo === "urgentes";
   const nome = usuario.tratamento ?? usuario.nome.split(" ")[0];
 
   return (
-    <div className="flex flex-col gap-12">
+    <div className="flex flex-col gap-10">
       <header>
-        <h1 className="font-serif text-[44px] leading-[1.02] tracking-[-0.02em] animate-in fade-in-0 slide-in-from-bottom-2 duration-500 sm:text-display-1">
-          {saudacao(hoje.getHours())}, {nome}.
+        <h1 className="font-serif text-[30px] leading-tight animate-in fade-in-0 slide-in-from-bottom-2 duration-500 sm:text-display-1">
+          {saudacao(hoje.getHours())}, {nome}
         </h1>
-        <p className="mt-4 text-corpo text-muted-foreground" aria-live="polite">
-          {carregando ? "Organizando os contatos…" : frase}
+        <p className="mt-2 text-corpo text-muted-foreground" aria-live="polite">
+          {carregando ? "Organizando os contatos…" : `${frase}.`}
         </p>
       </header>
 
-      <section aria-label="Resumo do dia" className="grid grid-cols-3 gap-3 sm:gap-4">
-        {[
-          { rotulo: "Novos", valor: novos },
-          { rotulo: "Urgentes", valor: urgentes, destaque: true },
-          { rotulo: "Agendados hoje", valor: agendadosHoje },
-        ].map((n) => (
-          <GlassCard key={n.rotulo} nivel="leve" forma="painel" className="px-4 py-5 sm:px-7 sm:py-6">
-            <p className="text-micro text-muted-foreground sm:text-apoio">{n.rotulo}</p>
+      <section aria-label="Resumo do dia" className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        {numeros.map((n) => (
+          <button
+            key={n.rotulo}
+            type="button"
+            onClick={n.acao}
+            title={n.dica}
+            aria-label={`${n.rotulo}: ${n.valor}. ${n.dica}`}
+            className="vidro-leve vidro-clicavel flex flex-col items-start rounded-3xl px-5 py-4 text-left sm:px-6 sm:py-5"
+          >
+            <span className="text-apoio text-muted-foreground">{n.rotulo}</span>
             {carregando ? (
-              <Skeleton className="mt-3 h-12 w-14" />
+              <Skeleton className="mt-3 h-8 w-12" />
             ) : (
-              <p className={cn("mt-2 font-serif text-[44px] leading-none tracking-[-0.02em] sm:text-display-1", n.destaque && "text-latao")}>{n.valor}</p>
+              <span className={cn("mt-1.5 font-serif text-[32px] leading-none", n.destaque && n.valor > 0 && "text-latao")}>{n.valor}</span>
             )}
-          </GlassCard>
+          </button>
         ))}
       </section>
 
       <section aria-label="Lista de atendimentos" className="flex flex-col gap-5">
-        <div className="flex flex-wrap items-center gap-3">
-          <Tabs value={grupo} onValueChange={(v) => setParam("grupo", v === "todos" ? null : v)}>
-            <TabsList aria-label="Filtrar por etapa">
-              {(Object.keys(GRUPOS) as Grupo[]).map((g) => (
-                <TabsTrigger key={g} value={g}>
-                  {GRUPOS[g].rotulo}
-                </TabsTrigger>
-              ))}
-            </TabsList>
+        <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
+          <Tabs value={ABAS.includes(grupo) ? grupo : ""} onValueChange={(v) => setParam("grupo", v === "todos" ? null : v)}>
+            <div className="scrollbar-fina -mx-4 overflow-x-auto px-4 pb-1 sm:mx-0 sm:px-0">
+              <TabsList aria-label="Filtrar por etapa">
+                {ABAS.map((g) => (
+                  <TabsTrigger key={g} value={g}>
+                    {GRUPOS[g].rotulo}
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+            </div>
           </Tabs>
 
-          <div className="ml-auto flex items-center gap-2">
-            {buscaAberta || busca ? (
-              <div className="campo flex h-11 w-56 items-center gap-2 rounded-full pl-4 pr-1.5 animate-in fade-in-0 slide-in-from-right-2 duration-200 sm:w-64">
-                <Search className="size-4 shrink-0 text-muted-foreground" strokeWidth={1.5} aria-hidden="true" />
-                <input
-                  ref={campoBusca}
-                  autoFocus
-                  value={busca}
-                  onChange={(e) => setParam("q", e.target.value)}
-                  onKeyDown={(e) => e.key === "Escape" && (setParam("q", null), setBuscaAberta(false))}
-                  placeholder="Buscar na lista"
-                  aria-label="Buscar na lista"
-                  className="min-w-0 flex-1 bg-transparent text-apoio outline-none placeholder:text-terciario focus-visible:outline-none"
-                />
+          <div className="flex flex-1 items-center gap-2 xl:justify-end">
+            <label className="campo flex h-11 min-w-0 flex-1 items-center gap-2 rounded-full pl-4 pr-1.5 xl:max-w-xs">
+              <Search className="size-4 shrink-0 text-muted-foreground" strokeWidth={1.5} aria-hidden="true" />
+              <span className="sr-only">Buscar na lista</span>
+              <input
+                value={busca}
+                onChange={(e) => setParam("q", e.target.value)}
+                onKeyDown={(e) => e.key === "Escape" && setParam("q", null)}
+                placeholder="Nome, telefone ou assunto"
+                className="min-w-0 flex-1 bg-transparent text-apoio outline-none placeholder:text-terciario focus-visible:outline-none"
+              />
+              {busca && (
                 <button
                   type="button"
-                  onClick={() => {
-                    setParam("q", null);
-                    setBuscaAberta(false);
-                  }}
-                  aria-label="Fechar busca"
+                  onClick={() => setParam("q", null)}
+                  aria-label="Limpar busca"
                   className="flex size-8 items-center justify-center rounded-full text-muted-foreground hover:bg-white/10 hover:text-foreground"
                 >
                   <X className="size-4" strokeWidth={1.5} aria-hidden="true" />
                 </button>
-              </div>
-            ) : (
-              <Button variant="vidro" size="icon" aria-label="Buscar na lista" className="text-muted-foreground hover:text-foreground" onClick={() => setBuscaAberta(true)}>
-                <Search strokeWidth={1.5} aria-hidden="true" />
-              </Button>
-            )}
+              )}
+            </label>
 
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button
-                  variant="vidro"
-                  size={area === TODAS_AREAS ? "icon" : "default"}
-                  aria-label={area === TODAS_AREAS ? "Filtrar por área" : `Filtrar por área: ${area}`}
-                  className={cn(area === TODAS_AREAS && "text-muted-foreground hover:text-foreground")}
-                >
-                  <ListFilter className="!text-muted-foreground" strokeWidth={1.5} aria-hidden="true" />
-                  {area !== TODAS_AREAS && <span>{area}</span>}
+                <Button variant="vidro" aria-label={`Filtrar por área: ${area === TODAS_AREAS ? "todas" : area}`}>
+                  {area === TODAS_AREAS ? "Todas as áreas" : area}
+                  <ChevronDown className="!size-4 !text-muted-foreground" strokeWidth={1.5} aria-hidden="true" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
@@ -198,6 +199,16 @@ export default function Atendimentos() {
           </div>
         </div>
 
+        {grupo === "urgentes" && (
+          <p className="-mt-1 flex items-center gap-2 text-apoio text-muted-foreground">
+            <span className="size-2 rounded-full bg-urgente" aria-hidden="true" />
+            Mostrando só os urgentes que ainda não falaram com a equipe.
+            <button type="button" onClick={() => setParam("grupo", null)} className="rounded text-foreground underline decoration-white/30 underline-offset-4 hover:decoration-white">
+              Ver todos
+            </button>
+          </p>
+        )}
+
         {carregando ? (
           <div className="flex flex-col gap-2.5" aria-busy="true" aria-label="Carregando atendimentos">
             {Array.from({ length: 6 }, (_, i) => (
@@ -208,7 +219,7 @@ export default function Atendimentos() {
           temFiltro ? (
             <EmptyState
               titulo="Nada por aqui"
-              descricao="Nenhum atendimento combina com a busca ou o filtro de área."
+              descricao="Nenhum atendimento combina com a busca ou com os filtros."
               acao={
                 <Button
                   variant="vidro"
@@ -217,6 +228,7 @@ export default function Atendimentos() {
                       const n = new URLSearchParams(p);
                       n.delete("q");
                       n.delete("area");
+                      n.delete("grupo");
                       return n;
                     })
                   }
@@ -226,7 +238,7 @@ export default function Atendimentos() {
               }
             />
           ) : (
-            <EmptyState titulo="A entrada está calma" descricao="Quando alguém chamar no WhatsApp, o contato aparece aqui já organizado." />
+            <EmptyState titulo="Nenhum cliente nesta etapa" descricao="Quando alguém chamar no WhatsApp, o assistente faz a triagem e o contato aparece aqui já organizado." />
           )
         ) : (
           <ul key={grupo + area} className="flex flex-col gap-2.5">

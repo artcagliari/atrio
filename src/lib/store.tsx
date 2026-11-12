@@ -22,6 +22,7 @@ import type {
   Consulta,
   Empresa,
   LimiteAssistente,
+  Mensagem,
   RegraUrgencia,
   StatusAtendimento,
   Usuario,
@@ -46,11 +47,22 @@ interface AppStore {
   entrar: (email: string) => void;
   sair: () => void;
 
+  /* Atendimentos */
   adicionarAtendimento: (a: Atendimento) => void;
+  atualizarAtendimento: (id: string, patch: Partial<Atendimento>) => void;
+  adicionarMensagem: (id: string, m: Mensagem) => void;
   marcarContatado: (id: string) => void;
   mudarStatus: (id: string, status: StatusAtendimento) => void;
-  agendarConsulta: (atendimentoId: string, inicio: Date) => Consulta;
+  registrarResultado: (atendimentoId: string, resultado: "contratou" | "nao_contratou") => void;
 
+  /* Consultas */
+  agendarConsulta: (atendimentoId: string, inicio: Date, por?: "assistente" | "equipe") => Consulta;
+  confirmarConsulta: (consultaId: string) => void;
+  remarcarConsulta: (consultaId: string, inicio: Date) => void;
+  cancelarConsulta: (consultaId: string) => void;
+  marcarConsultaRealizada: (consultaId: string) => void;
+
+  /* Configurações */
   salvarEmpresa: (e: Partial<Empresa>) => void;
   salvarAreas: (a: Area[]) => void;
   salvarRegrasUrgencia: (r: RegraUrgencia[]) => void;
@@ -82,7 +94,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   const [atendimentos, setAtendimentos] = useState<Atendimento[]>([]);
   const [consultas, setConsultas] = useState(consultasMock);
 
-  // Simula a latência da primeira carga para exibir os skeletons.
+  // Simula a latência da primeira carga para exibir os esqueletos.
   useEffect(() => {
     const t = setTimeout(() => {
       setAtendimentos(atendimentosMock);
@@ -91,8 +103,12 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     return () => clearTimeout(t);
   }, []);
 
-  const atualizar = useCallback((id: string, patch: Partial<Atendimento>) => {
+  const atualizarAtendimento = useCallback((id: string, patch: Partial<Atendimento>) => {
     setAtendimentos((lista) => lista.map((a) => (a.id === id ? { ...a, ...patch } : a)));
+  }, []);
+
+  const atualizarConsulta = useCallback((id: string, patch: Partial<Consulta>) => {
+    setConsultas((lista) => lista.map((c) => (c.id === id ? { ...c, ...patch } : c)));
   }, []);
 
   const entrar = useCallback((email: string) => {
@@ -114,43 +130,54 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     setLogado(false);
   }, []);
 
-  const adicionarAtendimento = useCallback((a: Atendimento) => {
-    setAtendimentos((lista) => [a, ...lista]);
+  const adicionarAtendimento = useCallback((a: Atendimento) => setAtendimentos((lista) => [a, ...lista]), []);
+
+  const adicionarMensagem = useCallback((id: string, m: Mensagem) => {
+    setAtendimentos((lista) => lista.map((a) => (a.id === id ? { ...a, mensagens: [...a.mensagens, m] } : a)));
   }, []);
 
-  const marcarContatado = useCallback(
-    (id: string) => {
-      setAtendimentos((lista) =>
-        lista.map((a) =>
-          a.id === id
-            ? {
-                ...a,
-                ultimoContatoHumano: new Date().toISOString(),
-                status: a.status === "novo" ? "aguardando_analise" : a.status,
-              }
-            : a,
-        ),
-      );
-    },
-    [],
-  );
+  const marcarContatado = useCallback((id: string) => {
+    setAtendimentos((lista) =>
+      lista.map((a) =>
+        a.id === id
+          ? { ...a, ultimoContatoHumano: new Date().toISOString(), status: a.status === "novo" ? "aguardando_analise" : a.status }
+          : a,
+      ),
+    );
+  }, []);
 
-  const mudarStatus = useCallback((id: string, status: StatusAtendimento) => atualizar(id, { status }), [atualizar]);
+  const mudarStatus = useCallback((id: string, status: StatusAtendimento) => atualizarAtendimento(id, { status }), [atualizarAtendimento]);
+
+  const registrarResultado = useCallback((atendimentoId: string, resultado: "contratou" | "nao_contratou") => {
+    setAtendimentos((lista) => lista.map((a) => (a.id === atendimentoId ? { ...a, status: resultado } : a)));
+    // A consulta mais recente que já passou passa a constar como realizada.
+    setConsultas((lista) =>
+      lista.map((c) =>
+        c.atendimentoId === atendimentoId && c.status !== "cancelada" && new Date(c.inicio).getTime() <= Date.now() ? { ...c, status: "realizada" } : c,
+      ),
+    );
+  }, []);
 
   const agendarConsulta = useCallback(
-    (atendimentoId: string, inicio: Date) => {
+    (atendimentoId: string, inicio: Date, por: "assistente" | "equipe" = "equipe") => {
       const nova: Consulta = {
         id: uid("c"),
         atendimentoId,
         inicio: inicio.toISOString(),
         fim: new Date(inicio.getTime() + horarios.duracaoMinutos * 60_000).toISOString(),
-        status: horarios.modo === "confirmar_direto" ? "confirmada" : "pre_agendada",
+        // Agendada pela equipe já nasce confirmada; pelo assistente segue a regra de Configurações › Horários.
+        status: por === "equipe" || horarios.modo === "confirmar_direto" ? "confirmada" : "pre_agendada",
+        agendadaPor: por,
       };
-      setConsultas((l) => [...l, nova]);
+      setConsultas((l) => [...l.map((c) => (c.atendimentoId === atendimentoId && c.status !== "realizada" ? { ...c, status: "cancelada" as const } : c)), nova]);
       setAtendimentos((lista) =>
         lista.map((a) =>
           a.id === atendimentoId
-            ? { ...a, status: "consulta_agendada", ultimoContatoHumano: a.ultimoContatoHumano ?? new Date().toISOString() }
+            ? {
+                ...a,
+                status: "consulta_agendada",
+                ultimoContatoHumano: por === "equipe" ? (a.ultimoContatoHumano ?? new Date().toISOString()) : a.ultimoContatoHumano,
+              }
             : a,
         ),
       );
@@ -158,6 +185,32 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     },
     [horarios],
   );
+
+  const confirmarConsulta = useCallback((id: string) => atualizarConsulta(id, { status: "confirmada" }), [atualizarConsulta]);
+
+  const remarcarConsulta = useCallback(
+    (id: string, inicio: Date) =>
+      atualizarConsulta(id, {
+        inicio: inicio.toISOString(),
+        fim: new Date(inicio.getTime() + horarios.duracaoMinutos * 60_000).toISOString(),
+        status: "confirmada",
+      }),
+    [atualizarConsulta, horarios],
+  );
+
+  const cancelarConsulta = useCallback((id: string) => {
+    setConsultas((lista) => {
+      const alvo = lista.find((c) => c.id === id);
+      if (alvo) {
+        // Sem consulta ativa, o cliente volta para "aguardando a equipe".
+        const outras = lista.some((c) => c.id !== id && c.atendimentoId === alvo.atendimentoId && c.status !== "cancelada");
+        if (!outras) setAtendimentos((l) => l.map((a) => (a.id === alvo.atendimentoId && a.status === "consulta_agendada" ? { ...a, status: "aguardando_analise" } : a)));
+      }
+      return lista.map((c) => (c.id === id ? { ...c, status: "cancelada" } : c));
+    });
+  }, []);
+
+  const marcarConsultaRealizada = useCallback((id: string) => atualizarConsulta(id, { status: "realizada" }), [atualizarConsulta]);
 
   const salvarEmpresa = useCallback((e: Partial<Empresa>) => setEmpresa((atual) => ({ ...atual, ...e })), []);
 
@@ -177,9 +230,16 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       entrar,
       sair,
       adicionarAtendimento,
+      atualizarAtendimento,
+      adicionarMensagem,
       marcarContatado,
       mudarStatus,
+      registrarResultado,
       agendarConsulta,
+      confirmarConsulta,
+      remarcarConsulta,
+      cancelarConsulta,
+      marcarConsultaRealizada,
       salvarEmpresa,
       salvarAreas: setAreas,
       salvarRegrasUrgencia: setRegras,
@@ -202,9 +262,16 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       entrar,
       sair,
       adicionarAtendimento,
+      atualizarAtendimento,
+      adicionarMensagem,
       marcarContatado,
       mudarStatus,
+      registrarResultado,
       agendarConsulta,
+      confirmarConsulta,
+      remarcarConsulta,
+      cancelarConsulta,
+      marcarConsultaRealizada,
       salvarEmpresa,
     ],
   );
