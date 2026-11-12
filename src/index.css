@@ -1,0 +1,205 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --fg: 244 247 247; /* #F4F7F7 */
+    /* Secundário e terciário: o pedido era white/65 e white/45; medidos sobre o vidro com as luzes
+       acesas, esses valores ficam abaixo de AA. Estes são os mínimos que passam. */
+    --fg-2-a: 0.82; /* secundário */
+    --fg-3-a: 0.66; /* terciário */
+    --latao: 201 164 106; /* #C9A46A — marca, uso raro */
+    --tinta: 10 26 28; /* #0A1A1C — texto sobre latão */
+    --urgente: 229 72 77; /* #E5484D — só o ponto de urgência */
+    --ciano: 47 184 184;
+
+    /* Pares no estilo shadcn: fundo escuro/translúcido ↔ texto claro, ou latão ↔ tinta escura */
+    --primary: var(--latao);
+    --primary-foreground: var(--tinta);
+    --secondary: 255 255 255; /* usado a 10% */
+    --secondary-foreground: var(--fg);
+    --accent: 255 255 255; /* usado a 15% */
+    --accent-foreground: var(--fg);
+
+    --sombra-vidro: 0 30px 80px -20px rgb(0 0 0 / 0.45);
+    color-scheme: dark;
+  }
+
+  * {
+    border-color: rgb(255 255 255 / 0.12);
+  }
+
+  /* O fundo fica no html (vai para o canvas): no body ele cobriria as luzes em z-index negativo */
+  html {
+    background: linear-gradient(180deg, #05141a 0%, #0a2a30 100%) fixed #05141a;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body {
+    @apply min-h-dvh font-sans text-corpo font-normal text-foreground antialiased;
+  }
+
+  /* Foco em latão para navegação por teclado */
+  :focus-visible {
+    outline: 2px solid rgb(var(--latao));
+    outline-offset: 2px;
+  }
+
+  ::selection {
+    background: rgb(var(--latao) / 0.4);
+    color: #fff;
+  }
+}
+
+@layer components {
+  /* ── Vidro em três níveis ─────────────────────────────────────────────
+     Base comum: borda white/14, brilho no topo (gradiente white/35 → 0),
+     reflexo diagonal no canto superior esquerdo e sombra grande. */
+  .vidro-leve,
+  .vidro,
+  .vidro-leitura {
+    position: relative;
+    isolation: isolate;
+    background-color: rgb(255 255 255 / var(--vidro-a));
+    border: 1px solid rgb(255 255 255 / 0.14);
+    box-shadow: var(--sombra-vidro);
+    /* brightness(): vidro levemente fumê — mantém transparência e desfoque, e garante AA sobre luz intensa */
+    -webkit-backdrop-filter: blur(40px) saturate(1.8) brightness(0.85);
+    backdrop-filter: blur(40px) saturate(1.8) brightness(0.85);
+    --vidro-a: 0.1;
+    --brilho: 0.35;
+  }
+  .vidro-leve {
+    --vidro-a: 0.07;
+  }
+  .vidro-leitura {
+    --vidro-a: 0.13;
+    -webkit-backdrop-filter: blur(64px) saturate(1.8) brightness(0.72);
+    backdrop-filter: blur(64px) saturate(1.8) brightness(0.72);
+  }
+
+  /* Luz caindo de cima: borda superior em gradiente */
+  .vidro-leve::before,
+  .vidro::before,
+  .vidro-leitura::before,
+  .vidro-interno::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    border-radius: inherit;
+    padding: 1px;
+    background: linear-gradient(180deg, rgb(255 255 255 / var(--brilho)) 0%, rgb(255 255 255 / 0) 55%);
+    -webkit-mask:
+      linear-gradient(#000 0 0) content-box,
+      linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    pointer-events: none;
+    transition: opacity 200ms ease-out;
+  }
+
+  /* Reflexo diagonal */
+  .vidro-leve::after,
+  .vidro::after,
+  .vidro-leitura::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    border-radius: inherit;
+    background: linear-gradient(135deg, rgb(255 255 255 / 0.08) 0%, rgb(255 255 255 / 0) 42%);
+    pointer-events: none;
+  }
+
+  /* Vidro dentro de vidro: metade do branco (mais transparente), senão a soma das camadas
+     clareia o fundo a ponto de o texto branco perder contraste. */
+  /* Dentro de um vidro, o pai já desfoca: um segundo backdrop-filter clareia a camada em vez de refratar. */
+  :is(.vidro-leve, .vidro, .vidro-leitura) :is(.vidro-leve, .vidro, .vidro-leitura, .campo) {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+  :is(.vidro-leve, .vidro, .vidro-leitura) .vidro-leve {
+    --vidro-a: 0.035;
+  }
+  :is(.vidro-leve, .vidro, .vidro-leitura) .vidro {
+    --vidro-a: 0.05;
+  }
+  :is(.vidro-leve, .vidro, .vidro-leitura) .vidro-leitura {
+    --vidro-a: 0.065;
+  }
+
+  /* Vidro dentro de vidro (balões, chips): mesma linguagem, sem novo desfoque */
+  .vidro-interno {
+    position: relative;
+    isolation: isolate;
+    background-color: rgb(255 255 255 / var(--vidro-a, 0.1));
+    border: 1px solid rgb(255 255 255 / 0.14);
+    --brilho: 0.3;
+  }
+
+  /* Hover em clicáveis: +4% de luz, brilho mais forte, sobe 2px */
+  .vidro-clicavel {
+    transition:
+      background-color 200ms ease-out,
+      transform 200ms ease-out,
+      box-shadow 200ms ease-out;
+  }
+  .vidro-clicavel:hover {
+    background-color: rgb(255 255 255 / calc(var(--vidro-a) + 0.04));
+    --brilho: 0.6;
+    transform: translateY(-2px);
+  }
+  .vidro-clicavel:active {
+    transform: translateY(0);
+  }
+
+  /* Campo de formulário em vidro */
+  .campo {
+    @apply w-full rounded-xl border text-corpo text-foreground outline-none transition-[border-color,box-shadow,background-color] duration-200 ease-out placeholder:text-terciario;
+    background-color: rgb(255 255 255 / 0.06);
+    border-color: rgb(255 255 255 / 0.12);
+    -webkit-backdrop-filter: blur(24px) saturate(1.6) brightness(0.9);
+    backdrop-filter: blur(24px) saturate(1.6) brightness(0.9);
+  }
+  .campo:hover {
+    border-color: rgb(255 255 255 / 0.22);
+  }
+  .campo:focus-visible,
+  .campo:focus-within {
+    outline: none;
+    border-color: rgb(var(--latao));
+    box-shadow: 0 0 0 4px rgb(var(--latao) / 0.16);
+  }
+
+  .scrollbar-fina {
+    scrollbar-width: thin;
+    scrollbar-color: rgb(255 255 255 / 0.18) transparent;
+  }
+
+  /* Forma de arco (topo totalmente arredondado) */
+  .arco {
+    border-radius: 999px 999px 6px 6px;
+  }
+}
+
+@layer utilities {
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  .vidro-clicavel:hover {
+    transform: none;
+  }
+}
